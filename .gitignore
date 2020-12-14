@@ -6,6 +6,8 @@ __pycache__/
 .idea/
 data.json
 config.py
+poke_data.json
+stam.py
 
 # C extensions
 *.so

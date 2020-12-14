@@ -25,3 +25,18 @@ CREATE TABLE trainer_pokemon(
     foreign key(trainer_name) references trainer(name),
     foreign key(pokemon_id) references pokemon(id)
 );
+
+
+CREATE TABLE type(
+    type_name varchar(30) NOT NULL PRIMARY KEY
+);
+
+
+CREATE TABLE types_pokemon(
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    pokemon_type varchar(30),
+    pokemon_id int,
+
+    foreign key(pokemon_id) references pokemon(id),
+    foreign key(pokemon_type) references type(type_name)
+);

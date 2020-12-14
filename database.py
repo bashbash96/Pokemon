@@ -1,5 +1,6 @@
 import pymysql
 from config import DB_PASSWORD, DB_NAME
+import requests
 
 connection = pymysql.connect(
     host='localhost',
@@ -110,6 +111,44 @@ def delete_pokemon_of_trainer(cursor, args):
         print("500 - Internal error while deleting pokemon from trainer", e)
 
 
+def add_type(cursor, args, table_name):
+    type_name = args[0]
+    try:
+        columns = ', '.join("`" + str(x).replace('/', '_') + "`" for x in ['type_name'])
+        values = ', '.join("'" + str(x).replace('/', '_') + "'" for x in [type_name])
+        query = "INSERT into %s (%s) VALUES (%s);" % (table_name, columns, values)
+        cursor.execute(query)
+        connection.commit()
+    except Exception as e:
+        print("Error while adding type", e)
+
+
+def connect_type_to_pokemon(cursor, args, table_name):
+    type_name, pokemon_id = args[0], args[1]
+    try:
+        columns = ', '.join("`" + str(x).replace('/', '_') + "`" for x in ['type_name', 'pokemon_id'])
+        values = ', '.join("'" + str(x).replace('/', '_') + "'" for x in [type_name, pokemon_id])
+        query = "INSERT into %s (%s) VALUES (%s);" % (table_name, columns, values)
+        cursor.execute(query)
+        connection.commit()
+    except Exception as e:
+        print("Error while connecting pokemon to type", e)
+
+
+def get_types_of_pokemon(pokemon_name):
+    api_url = f'https://pokeapi.co/api/v2/pokemon/{pokemon_name}'
+    response = requests.get(api_url)
+    return [val['type']['name'] for val in response.json()['types']]
+
+
+def update_types(cursor, args):
+    pokemon_name = args[0]
+    new_types = get_types_of_pokemon(pokemon_name)
+    for type in new_types:
+        add_type(cursor, (type,), 'type')
+        connect_type_to_pokemon(cursor, (type, pokemon_name), 'types_pokemon')
+
+
 def main_db(action, *args):
     try:
         with connection.cursor() as cursor:
@@ -118,7 +157,7 @@ def main_db(action, *args):
             elif action == 'add_trainer':
                 add_trainer(cursor, args, 'trainer')
             elif action == 'connect_pokemon_to_trainer':
-                connect_pokemon_to_trainer(cursor, args)
+                connect_pokemon_to_trainer(cursor, args, 'trainer_pokemon')
             elif action == 'get_pokemons_by_type':
                 return get_pokemons_by_type(cursor, args)
             elif action == 'get_pokemons_by_trainer':
@@ -127,6 +166,8 @@ def main_db(action, *args):
                 return get_trainers_of_pokemon(cursor, args)
             elif action == 'delete_pokemon_of_trainer':
                 delete_pokemon_of_trainer(cursor, args)
+            elif action == 'update_types':
+                update_types(cursor, args)
             else:
                 print("Invalid option")
     except Exception as err:
@@ -135,6 +176,7 @@ def main_db(action, *args):
 
 if __name__ == '__main__':
     # print(main_db('get_pokemons_by_type', 'grass'))
-    # print(main_db('get_trainers_of_pokemon', 'gengar'))
-    print(main_db('get_pokemons_by_trainer', 'Loga'))
+    print(main_db('get_trainers_of_pokemon', 'gengar'))
+    # print(main_db('get_pokemons_by_trainer', 'Loga'))
+    # main_db('update_types', 'gengar')
     # print(main_db('delete_pokemon_of_trainer', 'Loga', 'metapod'))
