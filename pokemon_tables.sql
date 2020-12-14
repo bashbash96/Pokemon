@@ -1,7 +1,7 @@
--- drop database sql_in_python
--- create database sql_in_python;
+drop database pokemons_db;
+create database pokemons_db;
 
-use sql_in_python;
+use pokemons_db;
 
 CREATE TABLE trainer(
     name varchar(20) NOT NULL PRIMARY KEY,
@@ -11,7 +11,6 @@ CREATE TABLE trainer(
 CREATE TABLE pokemon(
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(20),
-    type VARCHAR(30),
     height int,
     weight int
 );
@@ -26,17 +25,16 @@ CREATE TABLE trainer_pokemon(
     foreign key(pokemon_id) references pokemon(id)
 );
 
-
 CREATE TABLE type(
     type_name varchar(30) NOT NULL PRIMARY KEY
 );
 
-
 CREATE TABLE types_pokemon(
-    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    pokemon_type varchar(30),
+
+    type_name varchar(30) ,
     pokemon_id int,
 
     foreign key(pokemon_id) references pokemon(id),
-    foreign key(pokemon_type) references type(type_name)
+    foreign key(type_name) references type(type_name),
+    PRIMARY KEY (type_name, pokemon_id)
 );
