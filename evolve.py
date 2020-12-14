@@ -1,5 +1,4 @@
 import requests
-import json
 
 
 # gets pokemon name and returns specie chain dictionary
@@ -31,6 +30,3 @@ def evolve(pokemon):
     evolution_chain = get_evolution_chain(pokemon)
     evolved_pokemon = evolve_to(pokemon, evolution_chain)
     return evolved_pokemon
-
-
-#print(evolve("raichu"))

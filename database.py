@@ -15,11 +15,15 @@ connection = pymysql.connect(
 
 def add_pokemon(cursor, args, table_name):
     pokemon = args[0]
-    temp_pokemon = pokemon.copy()
+    temp_pokemon = {}
+    attributes = {'id', 'name', 'ownedBy', 'types', 'height', 'weight'}
+    for attribute in attributes:
+        temp_pokemon[attribute] = pokemon.get(attribute, None)
+
+    trainers = temp_pokemon['ownedBy']
     del temp_pokemon['ownedBy']
     types = temp_pokemon['types']
     del temp_pokemon['types']
-    del temp_pokemon['type']
     try:
         columns = ', '.join("`" + str(x).replace('/', '_') + "`" for x in temp_pokemon.keys())
         values = ', '.join("'" + str(x).replace('/', '_') + "'" for x in temp_pokemon.values())
@@ -27,9 +31,14 @@ def add_pokemon(cursor, args, table_name):
         cursor.execute(query)
         connection.commit()
         _id = temp_pokemon['id']
-        add_types_of_pokemon(cursor, _id, types)
+        if types:
+            add_types_of_pokemon(cursor, _id, types)
+        if trainers:
+            for trainer in trainers:
+                main_db('add_trainer', trainer)
+                main_db('connect_pokemon_to_trainer', trainer.get('name'), temp_pokemon['id'])
     except Exception as e:
-        print("Error while adding pokemon", e)
+        return {'error': 500, 'details': 'adding pokemon ' + str(e)}
 
 
 def add_trainer(cursor, args, table_name):
@@ -41,7 +50,7 @@ def add_trainer(cursor, args, table_name):
         cursor.execute(query)
         connection.commit()
     except Exception as e:
-        print("Error while adding trainer to db", e)
+        return {'error': 500, 'details': 'adding trainer ' + str(e)}
 
 
 def connect_pokemon_to_trainer(cursor, args, table_name):
@@ -53,7 +62,7 @@ def connect_pokemon_to_trainer(cursor, args, table_name):
         cursor.execute(query)
         connection.commit()
     except Exception as e:
-        print("Error while connecting pokemon to trainer", e)
+        return {'error': 500, 'details': 'connecting pokemon to trainer ' + str(e)}
 
 
 def get_pokemons_by_type(cursor, args):
@@ -63,8 +72,8 @@ def get_pokemons_by_type(cursor, args):
         cursor.execute(query)
         res = [val.get('name') for val in cursor.fetchall()]
         return res
-    except Exception as err:
-        print("500 - Internal error", err)
+    except Exception as e:
+        return {'error': 500, 'details': 'get pokemons by type ' + str(e)}
 
 
 def get_pokemons_by_trainer(cursor, args):
@@ -78,8 +87,8 @@ def get_pokemons_by_trainer(cursor, args):
         res = cursor.fetchall()
         res = [val.get('name') for val in res]
         return res
-    except Exception as err:
-        print("500 - Internal error", err)
+    except Exception as e:
+        return {'error': 500, 'details': 'get pokemons by trainer ' + str(e)}
 
 
 def get_trainers_of_pokemon(cursor, args):
@@ -93,8 +102,8 @@ def get_trainers_of_pokemon(cursor, args):
         res = cursor.fetchall()
         res = [val.get('name') for val in res]
         return res
-    except Exception as err:
-        print("500 - Internal error", err)
+    except Exception as e:
+        return {'error': 500, 'details': 'get trainers of pokemon ' + str(e)}
 
 
 def delete_pokemon_of_trainer(cursor, args):
@@ -114,7 +123,7 @@ def delete_pokemon_of_trainer(cursor, args):
         cursor.execute(query)
         connection.commit()
     except Exception as e:
-        print("500 - Internal error while deleting pokemon from trainer", e)
+        return {'error': 500, 'details': 'deleting pokemon from trainer ' + str(e)}
 
 
 def add_type(cursor, args, table_name):
@@ -126,24 +135,19 @@ def add_type(cursor, args, table_name):
         cursor.execute(query)
         connection.commit()
     except Exception as e:
-        print("Error while adding type", e)
+        return {'error': 500, 'details': 'Adding type ' + str(e)}
 
 
 def connect_type_to_pokemon(cursor, args, table_name):
     type_name, pokemon_id = args[0], args[1]
     try:
-        # query = f"select id from types_pokemon where type_name = '{type_name}' and pokemon_id = '{pokemon_id}'"
-        # cursor.execute(query)
-        # res = cursor.fetchall()
-        # if len(res) > 0:
-        #     return
         columns = ', '.join("`" + str(x).replace('/', '_') + "`" for x in ['type_name', 'pokemon_id'])
         values = ', '.join("'" + str(x).replace('/', '_') + "'" for x in [type_name, pokemon_id])
         query = "INSERT into %s (%s) VALUES (%s);" % (table_name, columns, values)
         cursor.execute(query)
         connection.commit()
     except Exception as e:
-        print("Error while connecting pokemon to type", e)
+        return {'error': 500, 'details': 'connecting pokemon to type ' + str(e)}
 
 
 def get_pokemon_details(pokemon_name):
@@ -177,9 +181,6 @@ def update_types(cursor, args):
     new_types = get_types_of_pokemon(pokemon_name)
     _id = get_id_by_name(cursor, pokemon_name)
     add_types_of_pokemon(cursor, _id, new_types)
-    # for type in new_types:
-    #     add_type(cursor, (type,), 'type')
-    #     connect_type_to_pokemon(cursor, (type, _id), 'types_pokemon')
 
 
 def evolve_pokemon(cursor, args):
@@ -187,7 +188,7 @@ def evolve_pokemon(cursor, args):
     try:
         evolved_pokemon = evolve(pokemon_name)
     except Exception as e:
-        return {'error': 'This pokemon can not be evolved'}
+        return {'error': 400, 'details': 'This pokemon can not be evolved ' + str(e)}
     evolved_details = get_pokemon_details(evolved_pokemon)
     update_pokemon_details(cursor, pokemon_name, evolved_details)
     update_types(cursor, (evolved_pokemon,))
@@ -201,24 +202,33 @@ def update_pokemon_details(cursor, *args):
     query = f"UPDATE pokemon SET name = '{new_pokemon_details['name']}' WHERE name = '{current_pokemon_name}'"
     cursor.execute(query)
     connection.commit()
-    print(new_pokemon_details['height'], new_pokemon_details['weight'], new_pokemon_details['name'])
-    print(current_pokemon_name)
 
 
-def donate_pokemon():
-    # todo feature
-    pass
+def donate_pokemon(cursor, args):
+    try:
+        trainer_donate = args[0]
+        to_trainer_name = args[1]
+        pokemon_name = args[2]
+        query = f"select id from pokemon where name = '{pokemon_name}'"
+        cursor.execute(query)
+        res = cursor.fetchall()
+        _id = res[0]['id']
+        query = f"UPDATE trainer_pokemon SET trainer_name = '{to_trainer_name}' WHERE trainer_name = '{trainer_donate}' AND pokemon_id = '{_id}'"
+        cursor.execute(query)
+        connection.commit()
+    except Exception as e:
+        return {'error': 500, 'details': 'donating pokemon failed ' + str(e)}
 
 
 def main_db(action, *args):
     try:
         with connection.cursor() as cursor:
             if action == 'add_pokemon':
-                add_pokemon(cursor, args, 'pokemon')
+                return add_pokemon(cursor, args, 'pokemon')
             elif action == 'add_trainer':
-                add_trainer(cursor, args, 'trainer')
+                return add_trainer(cursor, args, 'trainer')
             elif action == 'connect_pokemon_to_trainer':
-                connect_pokemon_to_trainer(cursor, args, 'trainer_pokemon')
+                return connect_pokemon_to_trainer(cursor, args, 'trainer_pokemon')
             elif action == 'get_pokemons_by_type':
                 return get_pokemons_by_type(cursor, args)
             elif action == 'get_pokemons_by_trainer':
@@ -226,13 +236,15 @@ def main_db(action, *args):
             elif action == 'get_trainers_of_pokemon':
                 return get_trainers_of_pokemon(cursor, args)
             elif action == 'delete_pokemon_of_trainer':
-                delete_pokemon_of_trainer(cursor, args)
+                return delete_pokemon_of_trainer(cursor, args)
             elif action == 'update_types':
-                update_types(cursor, args)
+                return update_types(cursor, args)
             elif action == 'evolve_pokemon':
-                evolve_pokemon(cursor, args)
+                return evolve_pokemon(cursor, args)
+            elif action == 'donate_pokemon':
+                return donate_pokemon(cursor, args)
             else:
-                print("Invalid option")
+                return {'error': 400, 'details': 'Invalid option '}
     except Exception as err:
         print("500 - Internal error", err)
 
@@ -241,5 +253,7 @@ if __name__ == '__main__':
     # print(main_db('get_pokemons_by_type', 'grass'))
     # print(main_db('evolve_pokemon', 'charmander'))
     # print(main_db('get_pokemons_by_trainer', 'Loga'))
-    print(main_db('update_types', 'gengar'))
+    # print(main_db('update_types', 'gengar'))
+    print(main_db('donate_pokemon', 'Ash', 'Candice', 'bulbasaur'))
+
     # print(main_db('delete_pokemon_of_trainer', 'Loga', 'metapod'))
